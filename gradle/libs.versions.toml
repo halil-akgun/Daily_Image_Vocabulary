@@ -13,6 +13,7 @@ kotlin = "1.9.24"
 room = "2.8.4"
 sqliteJdbc = "3.45.1.0"
 ksp = "1.9.24-1.0.20"
+media = "1.7.0"
 
 
 [libraries]
@@ -30,6 +31,7 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+androidx-media = { group = "androidx.media", name = "media", version.ref = "media" }
 
 
 [plugins]

@@ -9,7 +9,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
 class ImageAdapter(
-    private val list: List<ImageEntity>  // <-- ImageEntity olarak değişti
+    private val list: List<ImageEntity>
 ) : RecyclerView.Adapter<ImageAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -30,6 +30,6 @@ class ImageAdapter(
 
         val bitmap = BitmapFactory.decodeFile(item.filePath)
         holder.image.setImageBitmap(bitmap)
-        holder.text.text = item.word
+        holder.text.text = item.fileName.substringBeforeLast(".")
     }
 }

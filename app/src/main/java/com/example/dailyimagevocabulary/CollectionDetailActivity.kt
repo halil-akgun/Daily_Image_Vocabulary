@@ -92,7 +92,7 @@ class CollectionDetailActivity : AppCompatActivity() {
             val image = ImageEntity(
                 collectionId = collectionId,
                 filePath = path,
-                word = fileName
+                fileName = fileName
             )
 
             val db = AppDatabase.getDatabase(this@CollectionDetailActivity)

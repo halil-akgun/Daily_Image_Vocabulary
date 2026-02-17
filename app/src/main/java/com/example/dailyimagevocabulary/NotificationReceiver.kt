@@ -16,28 +16,36 @@ class NotificationReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
 
-            val images = dao.getAllImages()
+            val prefs = context.getSharedPreferences("app", Context.MODE_PRIVATE)
+            val collectionId = prefs.getInt("selectedCollectionId", 0)
+            
+            val images = dao.getImagesByCollection(collectionId)
             if (images.isEmpty()) return@launch
 
-            val prefs = context.getSharedPreferences("app", Context.MODE_PRIVATE)
             var index = prefs.getInt("index", 0)
 
             when (intent.action) {
-                "NEXT" -> index++
-                "PREV" -> index--
+                "CHANGE" -> {
+                    // Move to next image
+                    index++
+                    if (index >= images.size) index = 0
+                }
                 "DELETE" -> {
                     val image = images[index]
                     dao.deleteImage(image)
+                    // Reset index to 0 after deletion
                     index = 0
                 }
             }
 
-            if (index < 0) index = images.size - 1
-            if (index >= images.size) index = 0
-
             prefs.edit().putInt("index", index).apply()
 
-            val image = dao.getAllImages()[index]
+            // Refresh images list after potential deletion
+            val updatedImages = dao.getImagesByCollection(collectionId)
+            if (updatedImages.isEmpty()) return@launch
+            
+            val finalIndex = if (index >= updatedImages.size) 0 else index
+            val image = updatedImages[finalIndex]
 
             NotificationHelper.showNotification(context, image)
         }

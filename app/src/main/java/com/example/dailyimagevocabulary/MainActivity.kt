@@ -1,14 +1,20 @@
 package com.example.dailyimagevocabulary
 
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.EditText
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -17,6 +23,18 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: CollectionAdapter
     private val collections = mutableListOf<Pair<CollectionEntity, Int>>()
+    
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission granted, start services
+            startNotificationServices()
+        } else {
+            // Permission denied, show dialog instead of toast
+            showPermissionDeniedDialog()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +61,136 @@ class MainActivity : AppCompatActivity() {
 
         fab.setOnClickListener {
             showAddCollectionDialog()
+        }
+        
+        // Check notification permission first
+        checkNotificationPermission()
+    }
+    
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission already granted
+                    startNotificationServices()
+                }
+                else -> {
+                    // Request permission
+                    showPermissionRationaleDialog()
+                }
+            }
+        } else {
+            // Android version below 13, no need for permission
+            startNotificationServices()
+        }
+    }
+    
+    private fun showPermissionRationaleDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Notification Permission Required")
+            .setMessage("This app needs notification permission to show you daily vocabulary images. Please grant the permission to continue.")
+            .setPositiveButton("Grant Permission") { _, _ ->
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                // Show info dialog instead of toast
+                showPermissionDeniedDialog()
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    private fun showPermissionDeniedDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Permission Denied")
+            .setMessage("Without notification permission, you won't receive daily vocabulary reminders. You can enable it later in Settings.")
+            .setPositiveButton("OK") { _, _ ->
+                // Just close the dialog
+            }
+            .setCancelable(true)
+            .show()
+    }
+    
+    private fun startNotificationServices() {
+        // Schedule daily notifications
+        WorkManagerScheduler.scheduleDailyNotifications(this)
+        
+        // Start persistent notification service
+        PersistentNotificationService.startService(this)
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_select_collection -> {
+                showCollectionSelectionDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun showCollectionSelectionDialog() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getDatabase(this@MainActivity)
+            val collections = db.dao().getCollections()
+            
+            withContext(Dispatchers.Main) {
+                val collectionNames = collections.map { it.name }.toTypedArray()
+                val currentSelection = getSharedPreferences("app", MODE_PRIVATE)
+                    .getInt("selectedCollectionId", 0)
+                
+                var selectedIndex = collections.indexOfFirst { it.id == currentSelection }
+                if (selectedIndex == -1) selectedIndex = 0
+                
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Select Collection for Notifications")
+                    .setSingleChoiceItems(collectionNames, selectedIndex) { dialog, which ->
+                        val selectedId = collections[which].id
+                        getSharedPreferences("app", MODE_PRIVATE)
+                            .edit()
+                            .putInt("selectedCollectionId", selectedId)
+                            .putInt("index", 0) // Reset index when collection changes
+                            .apply()
+                        
+                        // Refresh notification immediately
+                        refreshNotification()
+                        
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+    }
+    
+    private fun refreshNotification() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getDatabase(this@MainActivity)
+            val dao = db.dao()
+            
+            val prefs = getSharedPreferences("app", MODE_PRIVATE)
+            val collectionId = prefs.getInt("selectedCollectionId", 0)
+            
+            val images = dao.getImagesByCollection(collectionId)
+            if (images.isNotEmpty()) {
+                val index = prefs.getInt("index", 0)
+                val image = images.getOrNull(index) ?: images.first()
+                
+                // Update notification
+                NotificationHelper.showNotification(this@MainActivity, image)
+                
+                // Also update persistent service
+                PersistentNotificationService.stopService(this@MainActivity)
+                PersistentNotificationService.startService(this@MainActivity)
+            }
         }
     }
 

@@ -9,5 +9,5 @@ data class ImageEntity(
     val id: Int = 0,
     val collectionId: Int,
     val filePath: String,
-    val word: String
+    val fileName: String
 )
