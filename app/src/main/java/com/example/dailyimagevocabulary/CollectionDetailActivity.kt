@@ -108,13 +108,14 @@ class CollectionDetailActivity : AppCompatActivity() {
     private fun copyImageToInternalStorage(uri: Uri): String {
 
         val extension = getFileExtension(uri)
+        val originalFileName = getOriginalFileName(uri) ?: "image_${System.currentTimeMillis()}"
 
         val input = contentResolver.openInputStream(uri)
 
         val dir = File(filesDir, "images/collection_$collectionId")
         if (!dir.exists()) dir.mkdirs()
 
-        val fileName = "img_${System.currentTimeMillis()}.$extension"
+        val fileName = "${originalFileName}.${extension}"
         val file = File(dir, fileName)
 
         input.use { inp ->
@@ -124,6 +125,37 @@ class CollectionDetailActivity : AppCompatActivity() {
         }
 
         return file.absolutePath
+    }
+
+    // =========================
+    // GET ORIGINAL FILE NAME
+    // =========================
+    private fun getOriginalFileName(uri: Uri): String? {
+        // Try to get display name from content resolver
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val displayNameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (displayNameIndex != -1) {
+                    val displayName = it.getString(displayNameIndex)
+                    if (!displayName.isNullOrBlank()) {
+                        // Remove extension from display name
+                        return displayName.substringBeforeLast(".")
+                    }
+                }
+            }
+        }
+        
+        // Fallback: try to get from URI path
+        val path = uri.path
+        if (!path.isNullOrBlank()) {
+            val fileName = File(path).name
+            if (fileName.isNotBlank()) {
+                return fileName.substringBeforeLast(".")
+            }
+        }
+        
+        return null
     }
 
     // =========================
