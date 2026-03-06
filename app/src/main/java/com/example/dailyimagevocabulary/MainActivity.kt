@@ -1,14 +1,19 @@
 package com.example.dailyimagevocabulary
 
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -115,11 +120,43 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun startNotificationServices() {
+        // Check battery optimization
+        checkBatteryOptimization()
+        
         // Schedule daily notifications
         WorkManagerScheduler.scheduleDailyNotifications(this)
         
         // Start persistent notification service
         PersistentNotificationService.startService(this)
+    }
+    
+    private fun checkBatteryOptimization() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val packageName = packageName
+            
+            val isIgnoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(packageName)
+            
+            if (!isIgnoringBatteryOptimizations) {
+                showBatteryOptimizationDialog()
+            }
+        }
+    }
+    
+    private fun showBatteryOptimizationDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Battery Optimization")
+            .setMessage("For reliable notifications, please disable battery optimization for this app.")
+            .setPositiveButton("Settings") { _, _ ->
+                val intent = Intent().apply {
+                    action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivityForResult(intent, 1001)
+            }
+            .setNegativeButton("Cancel", null)
+            .setCancelable(false)
+            .show()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {

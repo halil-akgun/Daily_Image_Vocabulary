@@ -24,7 +24,15 @@ class DailyNotificationWorker(
 
         val image = images[index]
 
+        // Increment index for next day
+        val nextIndex = (index + 1) % images.size
+        prefs.edit().putInt("index", nextIndex).apply()
+
         NotificationHelper.showNotification(applicationContext, image)
+        
+        // Refresh persistent notification service to show new image
+        PersistentNotificationService.stopService(applicationContext)
+        PersistentNotificationService.startService(applicationContext)
 
         return Result.success()
     }
