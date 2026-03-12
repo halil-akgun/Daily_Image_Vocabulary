@@ -17,7 +17,7 @@ interface AppDao {
     @Query("SELECT * FROM images")
     suspend fun getAllImages(): List<ImageEntity>
 
-    @Query("SELECT * FROM images WHERE collectionId = :collectionId")
+    @Query("SELECT * FROM images WHERE collectionId = :collectionId ORDER BY fileName ASC")
     suspend fun getImagesByCollection(collectionId: Int): List<ImageEntity>
 
     @Delete

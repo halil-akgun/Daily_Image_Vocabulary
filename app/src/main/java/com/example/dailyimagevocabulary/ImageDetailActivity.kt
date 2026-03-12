@@ -16,7 +16,8 @@ class ImageDetailActivity : AppCompatActivity() {
 
     private lateinit var imageView: ImageView
     private lateinit var titleText: TextView
-    private lateinit var changeButton: Button
+    private lateinit var previousButton: Button
+    private lateinit var nextButton: Button
     private lateinit var deleteButton: Button
     
     private var currentImage: ImageEntity? = null
@@ -32,7 +33,8 @@ class ImageDetailActivity : AppCompatActivity() {
 
         imageView = findViewById(R.id.imageView)
         titleText = findViewById(R.id.titleText)
-        changeButton = findViewById(R.id.changeButton)
+        previousButton = findViewById(R.id.previousButton)
+        nextButton = findViewById(R.id.nextButton)
         deleteButton = findViewById(R.id.deleteButton)
 
         // Get image data from intent
@@ -54,7 +56,11 @@ class ImageDetailActivity : AppCompatActivity() {
         loadImage(imagePath, imageName)
 
         // Set up buttons
-        changeButton.setOnClickListener {
+        previousButton.setOnClickListener {
+            changeToPreviousImage()
+        }
+
+        nextButton.setOnClickListener {
             changeToNextImage()
         }
 
@@ -114,6 +120,26 @@ class ImageDetailActivity : AppCompatActivity() {
         }
     }
 
+    private fun changeToPreviousImage() {
+        if (allImages.isNotEmpty()) {
+            currentIndex = if (currentIndex == 0) allImages.size - 1 else currentIndex - 1
+            currentImage = allImages[currentIndex]
+            
+            currentImage?.let { image ->
+                loadImage(image.filePath, image.fileName)
+                
+                // Update notification
+                NotificationHelper.showNotification(this@ImageDetailActivity, image)
+                
+                // Update shared preferences
+                getSharedPreferences("app", MODE_PRIVATE)
+                    .edit()
+                    .putInt("index", currentIndex)
+                    .apply()
+            }
+        }
+    }
+
     private fun showDeleteConfirmation() {
         currentImage?.let { image ->
             AlertDialog.Builder(this)
@@ -150,12 +176,21 @@ class ImageDetailActivity : AppCompatActivity() {
                     // No more images, close activity
                     finish()
                 } else {
-                    // Reset to first image
-                    currentIndex = 0
-                    currentImage = allImages.firstOrNull()
+                    // Adjust currentIndex if necessary (if deleted item was before current index)
+                    if (currentIndex >= allImages.size) {
+                        currentIndex = 0 // Wrap around if we were at the end
+                    }
+                    
+                    currentImage = allImages.getOrNull(currentIndex)
                     currentImage?.let { img ->
                         loadImage(img.filePath, img.fileName)
                         NotificationHelper.showNotification(this@ImageDetailActivity, img)
+                        
+                        // Update shared preferences with new index
+                        getSharedPreferences("app", MODE_PRIVATE)
+                            .edit()
+                            .putInt("index", currentIndex)
+                            .apply()
                     }
                 }
             }

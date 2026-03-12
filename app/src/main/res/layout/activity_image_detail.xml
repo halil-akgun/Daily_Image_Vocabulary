@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:padding="16dp">
 
@@ -31,26 +32,37 @@
         android:gravity="center">
 
         <Button
-            android:id="@+id/changeButton"
+            android:id="@+id/previousButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginEnd="8dp"
-            android:text="Change"
-            android:drawableStart="@android:drawable/ic_menu_rotate"
-            android:drawablePadding="8dp" />
+            android:layout_weight="1"
+            android:text="Previous"
+            app:icon="@android:drawable/ic_media_previous"
+            app:iconGravity="start"
+            app:iconPadding="8dp" />
 
         <Button
-            android:id="@+id/deleteButton"
+            android:id="@+id/nextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="Delete"
-            android:drawableStart="@android:drawable/ic_delete"
-            android:drawablePadding="8dp"
-            android:backgroundTint="@android:color/holo_red_dark" />
+            android:layout_weight="1"
+            android:text="Next"
+            app:icon="@android:drawable/ic_media_next"
+            app:iconGravity="end"
+            app:iconPadding="8dp" />
 
     </LinearLayout>
+
+    <Button
+        android:id="@+id/deleteButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Delete"
+        android:drawableStart="@android:drawable/ic_delete"
+        android:drawablePadding="8dp"
+        android:backgroundTint="@android:color/holo_red_dark" />
 
 </LinearLayout>

@@ -47,11 +47,12 @@ object NotificationHelper {
 
             val notification = CoreNotificationCompat.Builder(context, CHANNEL_ID)
                 .setContentText(image.fileName.substringBeforeLast("."))
-                .setSmallIcon(android.R.drawable.ic_menu_gallery)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setPriority(CoreNotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(contentPendingIntent)
                 .setStyle(CoreNotificationCompat.BigPictureStyle().bigPicture(bitmap))
                 .setAutoCancel(false)
+                .setOngoing(true)
                 .build()
 
             NotificationManagerCompat.from(context).notify(1, notification)

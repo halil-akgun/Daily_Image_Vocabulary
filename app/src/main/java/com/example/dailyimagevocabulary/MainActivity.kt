@@ -72,6 +72,12 @@ class MainActivity : AppCompatActivity() {
         checkNotificationPermission()
     }
     
+    override fun onResume() {
+        super.onResume()
+        // Refresh collections when returning from other activities
+        loadCollections()
+    }
+    
     private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {

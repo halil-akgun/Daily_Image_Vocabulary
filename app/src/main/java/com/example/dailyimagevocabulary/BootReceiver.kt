@@ -11,6 +11,12 @@ class BootReceiver : BroadcastReceiver() {
             // Start notification services after boot
             WorkManagerScheduler.scheduleDailyNotifications(context)
             PersistentNotificationService.startService(context)
+        } else if (intent.action == Intent.ACTION_PACKAGE_REPLACED || 
+                   intent.action == Intent.ACTION_PACKAGE_RESTARTED ||
+                   intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            // Restart services when app is updated or restarted
+            WorkManagerScheduler.scheduleDailyNotifications(context)
+            PersistentNotificationService.startService(context)
         }
     }
 }
