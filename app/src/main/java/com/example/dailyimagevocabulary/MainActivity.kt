@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: CollectionAdapter
     private val collections = mutableListOf<Pair<CollectionEntity, Int>>()
-    
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -67,17 +67,20 @@ class MainActivity : AppCompatActivity() {
         fab.setOnClickListener {
             showAddCollectionDialog()
         }
-        
+
         // Check notification permission first
         checkNotificationPermission()
+        
+        // Check auto-start on first launch or when needed
+        checkAutoStartIfNeeded()
     }
-    
+
     override fun onResume() {
         super.onResume()
         // Refresh collections when returning from other activities
         loadCollections()
     }
-    
+
     private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
@@ -98,9 +101,9 @@ class MainActivity : AppCompatActivity() {
             startNotificationServices()
         }
     }
-    
+
     private fun showPermissionRationaleDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Notification Permission Required")
             .setMessage("This app needs notification permission to show you daily vocabulary images. Please grant the permission to continue.")
             .setPositiveButton("Grant Permission") { _, _ ->
@@ -113,9 +116,9 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(false)
             .show()
     }
-    
+
     private fun showPermissionDeniedDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Permission Denied")
             .setMessage("Without notification permission, you won't receive daily vocabulary reminders. You can enable it later in Settings.")
             .setPositiveButton("OK") { _, _ ->
@@ -124,21 +127,164 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(true)
             .show()
     }
-    
+
     private fun startNotificationServices() {
         // Check battery optimization
         checkBatteryOptimization()
-        
+
         // Schedule daily notifications
         WorkManagerScheduler.scheduleDailyNotifications(this)
-        
+
         // Start persistent notification service
         PersistentNotificationService.startService(this)
+    }
+
+    private fun checkAutoStart() {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        val brand = Build.BRAND.lowercase()
+
+        when {
+            manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || brand.contains("xiaomi") || brand.contains("redmi") -> {
+                showAutoStartDialog("Settings → Apps → Permissions → Background Autostart → Enable ${getString(R.string.app_name)}")
+            }
+            manufacturer.contains("huawei") || brand.contains("huawei") || manufacturer.contains("honor") || brand.contains("honor") -> {
+                showAutoStartDialog("Settings → Apps → ${getString(R.string.app_name)} → Protected Apps → Enable")
+            }
+            manufacturer.contains("samsung") || brand.contains("samsung") -> {
+                showAutoStartDialog("Settings → Apps → ${getString(R.string.app_name)} → Battery → Allow background activity")
+            }
+            manufacturer.contains("oneplus") || brand.contains("oneplus") || manufacturer.contains("oppo") || brand.contains("oppo") ||
+            manufacturer.contains("realme") || brand.contains("realme") -> {
+                showAutoStartDialog("Settings → Battery → App Optimization → ${getString(R.string.app_name)} → Don't optimize")
+            }
+            manufacturer.contains("vivo") || brand.contains("vivo") -> {
+                showAutoStartDialog("Settings → iManager → App Auto-start → ${getString(R.string.app_name)} → Enable")
+            }
+            manufacturer.contains("asus") || brand.contains("asus") -> {
+                showAutoStartDialog("Settings → Power Manager → Auto-start Manager → ${getString(R.string.app_name)} → Enable")
+            }
+        }
+    }
+
+    private fun showAutoStartDialog(instructions: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Enable Auto Start")
+            .setMessage(
+                "To ensure daily vocabulary notifications work reliably, please allow this app to run in background and enable Auto-start.\n\n" +
+                        "How to enable it:\n$instructions"
+            )
+            .setPositiveButton("Open Settings") { _, _ ->
+                AutoStartHelper.openAutoStartSettings(this)
+            }
+            .setNegativeButton("Later", null)
+            .setNeutralButton("Don't show again") { _, _ ->
+                val prefs = getSharedPreferences("auto_start_prefs", MODE_PRIVATE)
+                prefs.edit().putBoolean("permanently_dismissed", true).apply()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun openManufacturerSettings() {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        val intent = when {
+            manufacturer.contains("xiaomi") || manufacturer.contains("redmi") -> {
+                // Xiaomi Auto-start settings - try multiple approaches
+                try {
+                    // Try 1: Direct auto-start permission
+                    Intent().apply {
+                        action = "com.miui.securitycenter.action.AppPermissionEditor"
+                        putExtra("extra_pkgname", packageName)
+                        putExtra("extra_permission_name", "auto_start")
+                    }
+                } catch (_: Exception) {
+                    try {
+                        // Try 2: Security center main
+                        Intent().apply {
+                            action = "com.miui.securitycenter.action.MAIN"
+                            putExtra("open_page", "app_permission_editor")
+                            putExtra("package_name", packageName)
+                        }
+                    } catch (_: Exception) {
+                        // Try 3: General app settings
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                    }
+                }
+            }
+            manufacturer.contains("huawei") || manufacturer.contains("honor") -> {
+                // Huawei Protected Apps
+                Intent().apply {
+                    action = "huawei.intent.action.HWAPPS"
+                    putExtra("packageName", packageName)
+                }
+            }
+            manufacturer.contains("samsung") -> {
+                // Samsung Battery optimization
+                Intent().apply {
+                    action = "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+                    data = Uri.parse("package:$packageName")
+                }
+            }
+            manufacturer.contains("oneplus") || manufacturer.contains("oppo") || manufacturer.contains("realme") -> {
+                // OnePlus/Oppo/Realme App optimization
+                Intent().apply {
+                    action = "android.settings.APPLICATION_DETAILS_SETTINGS"
+                    data = Uri.parse("package:$packageName")
+                }
+            }
+            manufacturer.contains("vivo") -> {
+                // Vivo iManager
+                Intent().apply {
+                    action = "android.settings.APPLICATION_DETAILS_SETTINGS"
+                    data = Uri.parse("package:$packageName")
+                }
+            }
+            manufacturer.contains("asus") -> {
+                // Asus Auto-start Manager
+                Intent().apply {
+                    action = "com.asus.mobilemanager.action.MAIN"
+                }
+            }
+            else -> {
+                // Fallback to general app settings
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                }
+            }
+        }
+
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            // Fallback to general app settings if specific intent fails
+            openAppSettings()
+        }
+    }
+
+    private fun checkAutoStartIfNeeded() {
+        val prefs = getSharedPreferences("auto_start_prefs", MODE_PRIVATE)
+        val permanentlyDismissed = prefs.getBoolean("permanently_dismissed", false)
+        
+        // Don't show if user permanently dismissed
+        if (permanentlyDismissed) {
+            return
+        }
+
+        checkAutoStart()
+    }
+
+    private fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+        startActivity(intent)
     }
     
     private fun checkBatteryOptimization() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             val packageName = packageName
             
             val isIgnoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(packageName)
@@ -193,7 +339,7 @@ class MainActivity : AppCompatActivity() {
                 var selectedIndex = collections.indexOfFirst { it.id == currentSelection }
                 if (selectedIndex == -1) selectedIndex = 0
                 
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                AlertDialog.Builder(this@MainActivity)
                     .setTitle("Select Collection for Notifications")
                     .setSingleChoiceItems(collectionNames, selectedIndex) { dialog, which ->
                         val selectedId = collections[which].id
@@ -204,7 +350,7 @@ class MainActivity : AppCompatActivity() {
                             .apply()
                         
                         // Refresh notification immediately
-                        refreshNotification()
+                        refreshNotification(this@MainActivity)
                         
                         dialog.dismiss()
                     }
@@ -213,26 +359,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
-    private fun refreshNotification() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val db = AppDatabase.getDatabase(this@MainActivity)
-            val dao = db.dao()
-            
-            val prefs = getSharedPreferences("app", MODE_PRIVATE)
-            val collectionId = prefs.getInt("selectedCollectionId", 0)
-            
-            val images = dao.getImagesByCollection(collectionId)
-            if (images.isNotEmpty()) {
-                val index = prefs.getInt("index", 0)
-                val image = images.getOrNull(index) ?: images.first()
-                
-                // Update notification
-                NotificationHelper.showNotification(this@MainActivity, image)
-                
-                // Also update persistent service
-                PersistentNotificationService.stopService(this@MainActivity)
-                PersistentNotificationService.startService(this@MainActivity)
+
+    companion object {
+        fun refreshNotification(context: Context) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val image = NotificationHelper.getCurrentImage(context)
+                if (image != null) {
+                    NotificationHelper.showNotification(context, image)
+                    
+                    // Also update persistent service
+                    PersistentNotificationService.stopService(context)
+                    PersistentNotificationService.startService(context)
+                }
             }
         }
     }
@@ -264,7 +402,7 @@ class MainActivity : AppCompatActivity() {
         val editText = EditText(this)
         editText.hint = "Collection name"
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("New Collection")
             .setView(editText)
             .setPositiveButton("Save") { _, _ ->

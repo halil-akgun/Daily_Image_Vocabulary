@@ -58,4 +58,32 @@ object NotificationHelper {
             NotificationManagerCompat.from(context).notify(1, notification)
         }
     }
+    
+    // Get the current image that should be displayed
+    suspend fun getCurrentImage(context: Context): ImageEntity? {
+        return try {
+            val db = AppDatabase.getDatabase(context)
+            val dao = db.dao()
+            
+            val prefs = context.getSharedPreferences("app", Context.MODE_PRIVATE)
+            val collectionId = prefs.getInt("selectedCollectionId", 0)
+            
+            val images = dao.getImagesByCollection(collectionId)
+            if (images.isNotEmpty()) {
+                val index = prefs.getInt("index", 0)
+                images.getOrNull(index) ?: images.first()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("NotificationHelper", "Error getting current image", e)
+            null
+        }
+    }
+    
+    // Get the current image name for quick display
+    suspend fun getCurrentImageName(context: Context): String {
+        val image = getCurrentImage(context)
+        return image?.fileName?.substringBeforeLast(".") ?: "No images in collection"
+    }
 }
