@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: CollectionAdapter
     private val collections = mutableListOf<Pair<CollectionEntity, Int>>()
+    private lateinit var repository: AppRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -44,6 +45,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        
+        repository = AppRepository(this)
 
         val recyclerView = findViewById<RecyclerView>(R.id.recyclerViewCollections)
         val fab = findViewById<FloatingActionButton>(R.id.fabAddCollection)
@@ -178,110 +181,21 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Later", null)
             .setNeutralButton("Don't show again") { _, _ ->
-                val prefs = getSharedPreferences("auto_start_prefs", MODE_PRIVATE)
-                prefs.edit().putBoolean("permanently_dismissed", true).apply()
+                repository.setAutoStartPermanentlyDismissed()
             }
             .setCancelable(false)
             .show()
     }
 
-    private fun openManufacturerSettings() {
-        val manufacturer = Build.MANUFACTURER.lowercase()
-        val intent = when {
-            manufacturer.contains("xiaomi") || manufacturer.contains("redmi") -> {
-                // Xiaomi Auto-start settings - try multiple approaches
-                try {
-                    // Try 1: Direct auto-start permission
-                    Intent().apply {
-                        action = "com.miui.securitycenter.action.AppPermissionEditor"
-                        putExtra("extra_pkgname", packageName)
-                        putExtra("extra_permission_name", "auto_start")
-                    }
-                } catch (_: Exception) {
-                    try {
-                        // Try 2: Security center main
-                        Intent().apply {
-                            action = "com.miui.securitycenter.action.MAIN"
-                            putExtra("open_page", "app_permission_editor")
-                            putExtra("package_name", packageName)
-                        }
-                    } catch (_: Exception) {
-                        // Try 3: General app settings
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.parse("package:$packageName")
-                        }
-                    }
-                }
-            }
-            manufacturer.contains("huawei") || manufacturer.contains("honor") -> {
-                // Huawei Protected Apps
-                Intent().apply {
-                    action = "huawei.intent.action.HWAPPS"
-                    putExtra("packageName", packageName)
-                }
-            }
-            manufacturer.contains("samsung") -> {
-                // Samsung Battery optimization
-                Intent().apply {
-                    action = "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-                    data = Uri.parse("package:$packageName")
-                }
-            }
-            manufacturer.contains("oneplus") || manufacturer.contains("oppo") || manufacturer.contains("realme") -> {
-                // OnePlus/Oppo/Realme App optimization
-                Intent().apply {
-                    action = "android.settings.APPLICATION_DETAILS_SETTINGS"
-                    data = Uri.parse("package:$packageName")
-                }
-            }
-            manufacturer.contains("vivo") -> {
-                // Vivo iManager
-                Intent().apply {
-                    action = "android.settings.APPLICATION_DETAILS_SETTINGS"
-                    data = Uri.parse("package:$packageName")
-                }
-            }
-            manufacturer.contains("asus") -> {
-                // Asus Auto-start Manager
-                Intent().apply {
-                    action = "com.asus.mobilemanager.action.MAIN"
-                }
-            }
-            else -> {
-                // Fallback to general app settings
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", packageName, null)
-                }
-            }
-        }
-
-        try {
-            startActivity(intent)
-        } catch (_: Exception) {
-            // Fallback to general app settings if specific intent fails
-            openAppSettings()
-        }
-    }
-
     private fun checkAutoStartIfNeeded() {
-        val prefs = getSharedPreferences("auto_start_prefs", MODE_PRIVATE)
-        val permanentlyDismissed = prefs.getBoolean("permanently_dismissed", false)
-        
         // Don't show if user permanently dismissed
-        if (permanentlyDismissed) {
+        if (repository.isAutoStartPermanentlyDismissed()) {
             return
         }
 
         checkAutoStart()
     }
 
-    private fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", packageName, null)
-        }
-        startActivity(intent)
-    }
-    
     private fun checkBatteryOptimization() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -304,7 +218,7 @@ class MainActivity : AppCompatActivity() {
                     action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
                     data = Uri.parse("package:$packageName")
                 }
-                startActivityForResult(intent, 1001)
+                startActivityForResult(intent, AppConstants.REQUEST_CODE_BATTERY_OPTIMIZATION)
             }
             .setNegativeButton("Cancel", null)
             .setCancelable(false)
@@ -328,13 +242,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCollectionSelectionDialog() {
         lifecycleScope.launch(Dispatchers.IO) {
-            val db = AppDatabase.getDatabase(this@MainActivity)
-            val collections = db.dao().getCollections()
+            val collections = repository.getCollectionsWithCount().map { it.first }
             
             withContext(Dispatchers.Main) {
                 val collectionNames = collections.map { it.name }.toTypedArray()
-                val currentSelection = getSharedPreferences("app", MODE_PRIVATE)
-                    .getInt("selectedCollectionId", 0)
+                val currentSelection = repository.getSelectedCollectionId()
                 
                 var selectedIndex = collections.indexOfFirst { it.id == currentSelection }
                 if (selectedIndex == -1) selectedIndex = 0
@@ -343,11 +255,7 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("Select Collection for Notifications")
                     .setSingleChoiceItems(collectionNames, selectedIndex) { dialog, which ->
                         val selectedId = collections[which].id
-                        getSharedPreferences("app", MODE_PRIVATE)
-                            .edit()
-                            .putInt("selectedCollectionId", selectedId)
-                            .putInt("index", 0) // Reset index when collection changes
-                            .apply()
+                        repository.setSelectedCollectionId(selectedId)
                         
                         // Refresh notification immediately
                         refreshNotification(this@MainActivity)
@@ -362,7 +270,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         fun refreshNotification(context: Context) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                 val image = NotificationHelper.getCurrentImage(context)
                 if (image != null) {
                     NotificationHelper.showNotification(context, image)
@@ -377,18 +285,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadCollections() {
         lifecycleScope.launch(Dispatchers.IO) {
-
-            val db = AppDatabase.getDatabase(this@MainActivity)
-            val dao = db.dao()
-
-            val items = dao.getCollections()
-
-            val listWithCount = mutableListOf<Pair<CollectionEntity, Int>>()
-
-            for (c in items) {
-                val count = dao.getImageCount(c.id) // <-- BURASI ÖNEMLİ
-                listWithCount.add(Pair(c, count))
-            }
+            val listWithCount = repository.getCollectionsWithCount()
 
             withContext(Dispatchers.Main) {
                 collections.clear()
@@ -415,9 +312,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun addCollectionToDb(name: String) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val db = AppDatabase.getDatabase(this@MainActivity)
-            db.dao().insertCollection(CollectionEntity(name = name))
-
+            repository.addCollection(name)
             loadCollections() // reload
         }
     }

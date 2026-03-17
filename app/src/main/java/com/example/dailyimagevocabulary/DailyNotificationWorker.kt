@@ -10,23 +10,8 @@ class DailyNotificationWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        val db = AppDatabase.getDatabase(applicationContext)
-        val dao = db.dao()
-
-        val prefs = applicationContext.getSharedPreferences("app", Context.MODE_PRIVATE)
-        val collectionId = prefs.getInt("selectedCollectionId", 0)
-
-        val images = dao.getImagesByCollection(collectionId)
-        if (images.isEmpty()) return Result.success()
-
-        var index = prefs.getInt("index", 0)
-        if (index >= images.size) index = 0
-
-        val image = images[index]
-
-        // Increment index for next day
-        val nextIndex = (index + 1) % images.size
-        prefs.edit().putInt("index", nextIndex).apply()
+        val repository = AppRepository(applicationContext)
+        val image = repository.getImagesForDailyNotification() ?: return Result.success()
 
         NotificationHelper.showNotification(applicationContext, image)
         

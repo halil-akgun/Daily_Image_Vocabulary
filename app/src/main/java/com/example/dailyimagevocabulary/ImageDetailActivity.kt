@@ -164,7 +164,7 @@ class ImageDetailActivity : AppCompatActivity() {
             // Delete file
             try {
                 File(image.filePath).delete()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Handle file deletion error
             }
             

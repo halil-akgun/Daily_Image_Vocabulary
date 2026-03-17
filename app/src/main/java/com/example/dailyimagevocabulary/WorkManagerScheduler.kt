@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 
 object WorkManagerScheduler {
     
-    private const val DAILY_WORK_TAG = "daily_notification_work"
+    private const val DAILY_WORK_TAG = AppConstants.DAILY_WORK_TAG
     
     fun scheduleDailyNotifications(context: Context) {
         // Calculate time until midnight
@@ -40,9 +40,5 @@ object WorkManagerScheduler {
             ExistingPeriodicWorkPolicy.REPLACE,
             workRequest
         )
-    }
-    
-    fun cancelDailyNotifications(context: Context) {
-        WorkManager.getInstance(context).cancelAllWorkByTag(DAILY_WORK_TAG)
     }
 }
